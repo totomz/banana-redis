@@ -20,7 +20,7 @@ public class TestObjectToMap {
         
         HashMap<String, String> map = RedisAdapter
                 .objToMap(Utils.generateGoogleHost("ciaone"))
-                .getOrElseThrow(t -> t);
+                .orElseThrow(Exception::new);
         
 //        map.forEach((k, v) -> {System.out.println(k + "--> " + v);});
         
@@ -32,7 +32,7 @@ public class TestObjectToMap {
         // Test the id agains a different object
         HashMap<String, String> map2 = RedisAdapter
                 .objToMap(Utils.generateDigitalOceanHost("digiciccio"))
-                .getOrElseThrow(t -> t);
+                .orElseThrow(Exception::new);
         
         Assert.assertEquals("host:digiciccio", map2.get("@key"));
     }
@@ -48,7 +48,7 @@ public class TestObjectToMap {
         map.put("sparse", "27.85");
         map.put("class", "org.bananarama.redis.entities.GoogleHost");
         
-        GoogleHost host = (GoogleHost)RedisAdapter.mapToObject(map).getOrElseThrow(t -> t);
+        GoogleHost host = (GoogleHost)RedisAdapter.mapToObject(map).orElseThrow(Exception::new);
         
         Assert.assertNotNull(host);
         Assert.assertEquals("antonello", host.getHostname());

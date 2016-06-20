@@ -27,12 +27,6 @@
         </dependency>
         
         <dependency>
-            <groupId>com.javaslang</groupId>
-            <artifactId>javaslang</artifactId>
-            <version>2.0.0-RC4</version>
-        </dependency>
-        
-        <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>${version.logback}</version>
@@ -54,31 +48,10 @@
         </dependency>
     </dependencies>
     
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.5.1</version>
-                <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.mapstruct</groupId>
-                            <artifactId>mapstruct-processor</artifactId>
-                            <version>${org.mapstruct.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-    
     <repositories>
         <repository>
             <id>totomz-github</id>
-            <name>Totomz  maven repo</name>
+            <name>Totomz  maven repo for bananarama</name>
             <url>http://totomz.github.com/mvn-repo/repository/</url>
         </repository>  
     </repositories>

@@ -5,15 +5,15 @@ import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
-import javaslang.control.Either;
-import javaslang.control.Try;
 import org.bananarama.crud.Adapter;
 import org.bananarama.crud.CreateOperation;
 import org.bananarama.crud.DeleteOperation;
@@ -48,7 +48,8 @@ public class RedisAdapter implements Adapter<Object> {
         });
     }
 
-    public static <T> Either<Exception, T> mapToObject(Map<String, String> map) {
+    @SuppressWarnings("unchecked")
+    public static <T> Optional<T> mapToObject(Map<String, String> map) {
 
         try {
             Class clazz = Class.forName(map.get("class"));
@@ -77,36 +78,32 @@ public class RedisAdapter implements Adapter<Object> {
             }
 
             // Set the id
-            return Either.right((T)obj);
+            return Optional.of((T)obj);
         } 
         catch (Exception e) {
             log.warn(e.getMessage(), e);
-            return Either.left(e);
+            return Optional.empty();
         }
     }
 
-    public static <T> Either<Exception, HashMap<String, String>> objToMap(T t) {
+    public static <T> Optional<HashMap<String, String>> objToMap(T t) {
 
         try {
             HashMap<String, String> objectAsMap = new HashMap<>();
             BeanInfo info = Introspector.getBeanInfo(t.getClass());
-//            System.out.println("::::::::::::::::::::::::::::::::::::");
             for (PropertyDescriptor pd : info.getPropertyDescriptors()) {
 
                 Method reader = pd.getReadMethod();
                 if (reader != null) {
                     String pname = reader.isAnnotationPresent(KeyGenerator.class) ? "@key" : pd.getName();
-//                    System.out.println(pname);
-
                     objectAsMap.put(pname, reader.invoke(t).toString());
                 }
             }
-//            System.out.println("::::::::::::::::::::::::::::::::::::");
-            return Either.right(objectAsMap);
+            return Optional.of(objectAsMap);
         } 
         catch (Exception e) {
             log.warn("Error mapping an object to a map", e);
-            return Either.left(e);
+            return Optional.empty();
         }
     }
 
@@ -131,8 +128,8 @@ public class RedisAdapter implements Adapter<Object> {
                         Pipeline pipeline = jedis.pipelined()){
                     
                     data.map(RedisAdapter::objToMap) // Convert to hashmap
-                        .filter(Either::isRight) // throw away wrong stuff 
-                        .map(Either::get)
+                        .filter(Optional::isPresent) // throw away wrong stuff 
+                        .map(Optional::get)
                         .forEach(mapObj -> {                            
                             String key = mapObj.get("@key");
                             mapObj.entrySet().stream()
@@ -183,6 +180,7 @@ public class RedisAdapter implements Adapter<Object> {
             }
 
             @Override
+            @SuppressWarnings("unchecked")
             public Stream<T> fromKeys(List<?> keys, QueryOptions options) {
                 try(Jedis jedis = getJedis()){
                                    
@@ -192,15 +190,15 @@ public class RedisAdapter implements Adapter<Object> {
                             .filter(mm -> {return mm.isAnnotationPresent(KeyGenerator.class) && mm.getName().startsWith("get") ;})
                             .findFirst().get();
                     
-                    return (Stream<T>) javaslang.collection.Stream.ofAll(keys)
-                            .map(obj ->{return Try.of(() -> {                    
-                                return m.invoke(obj).toString();}).get();
-                            })                            
-                            .map(jedis::hgetAll)
-                            .filter(map -> {return !map.isEmpty();})
-                            .map(RedisAdapter::mapToObject)
-                            .map(Either::get)                            
-                            .toJavaStream();                    
+                    return (Stream<T>) keys.stream().map(obj -> {
+                        try{return m.invoke(obj).toString();}
+                        catch(IllegalAccessException | IllegalArgumentException | InvocationTargetException e){log.error(e.getMessage(), e); return null;}
+                    }).map(jedis::hgetAll)
+                    .filter(map -> {return !map.isEmpty();})
+                    .map(RedisAdapter::mapToObject)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get);
+                    
                 }
                 catch(Exception e) {
                     log.error(e.getMessage(), e);
@@ -245,8 +243,8 @@ public class RedisAdapter implements Adapter<Object> {
                         Pipeline pipeline = jedis.pipelined()){
                     
                     data.map(RedisAdapter::objToMap) // Convert to hashmap
-                        .filter(Either::isRight) // throw away wrong stuff 
-                        .map(Either::get)
+                        .filter(Optional::isPresent) // throw away wrong stuff 
+                        .map(Optional::get)
                         .map(map -> map.get("@key"))
                         .forEach(pipeline::del);
                     

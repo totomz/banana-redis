@@ -1,10 +1,10 @@
 package org.bananarama.crud.redis.entities;
 
 import org.bananarama.annotation.Banana;
-import org.bananarama.crud.redis.RedisAdapter;
+import org.bananarama.crud.redis.RedisAdapterImpl;
 import org.bananarama.crud.redis.annotations.KeyGenerator;
 
-@Banana(adapter = RedisAdapter.class)
+@Banana(adapter = RedisAdapterImpl.class)
 public class Host {
     
     // This field contains the id of the instance. No need to annotat ethis field,

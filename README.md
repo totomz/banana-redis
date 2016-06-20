@@ -10,7 +10,10 @@ This module *does not want to be an ORM*; at now, is more something to keep orde
 
 # Usage
 
-Objects are serialized/deserialized using redi HashSets only.
+Objects are serialized/deserialized using redis HashSets only.
+
+First of all, extend the abstract class `org.bananarama.crud.redis.RedisAdapter`; the method `protected abstract Jedis getJedis();` must be implemented to provide a valid jedis
+connection. 
 
 This is a simple class that can be serialized/desderialized using his banana:
 
@@ -18,10 +21,10 @@ This is a simple class that can be serialized/desderialized using his banana:
 package org.bananarama.redis.entities;
 
 import org.bananarama.annotation.Banana;
-import org.bananarama.crud.redis.RedisAdapter;
+import org.bananarama.crud.redis.RedisAdapterImpl;
 import org.bananarama.crud.redis.annotations.KeyGenerator;
 
-@Banana(adapter = RedisAdapter.class)
+@Banana(adapter = RedisAdapterImpl.class)
 public class Host {
     
     // This field contains the id of the instance. No need to annotat ethis field,

@@ -26,10 +26,15 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
 
 /**
- *
+ * Simple adapter for CRUD operations of objects saved as HashSet in a redis db. 
+ * 
+ * Each instance must have an unique identifier, and getter/setter methods annotated with {@link KeyGenerator} that are used to convert the
+ * instance id in a custom redis key; eg the class Host has a unique id the string "www.web.com", and the equivalent redis key is in the form "host:www.web.com:key"
+ * 
+ * This class is abstract; the implementations must provide the necessary connection string to the redis instance
  * @author Tommaso Doninelli
  */
-public class RedisAdapter implements Adapter<Object> {
+public abstract class RedisAdapter implements Adapter<Object> {
 
     private static final Logger log = LoggerFactory.getLogger(RedisAdapter.class);
 
@@ -107,9 +112,12 @@ public class RedisAdapter implements Adapter<Object> {
         }
     }
 
-    private Jedis getJedis(){
-        return new Jedis();
-    }
+    /**
+     * The provider for a connection. 
+     * Implementation shall use this method to return a pooled connection, using a custom connection string.
+     * @return a {@link Jedis} connection
+     */
+    protected abstract Jedis getJedis();
     
     @Override
     public <T> CreateOperation<T> create(Class<T> clazz) {
@@ -118,6 +126,7 @@ public class RedisAdapter implements Adapter<Object> {
             
             @Override
             public CreateOperation<T> from(Stream<T> data) {
+                
                 return from(data, null);
             }
 

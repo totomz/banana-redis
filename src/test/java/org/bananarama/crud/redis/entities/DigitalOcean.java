@@ -1,13 +1,13 @@
 package org.bananarama.crud.redis.entities;
 
 import org.bananarama.annotation.Banana;
-import org.bananarama.crud.redis.RedisAdapter;
+import org.bananarama.crud.redis.RedisAdapterImpl;
 
 /**
  * 
  * @author Tommaso Doninelli
  */
-@Banana(adapter = RedisAdapter.class)
+@Banana(adapter = RedisAdapterImpl.class)
 public class DigitalOcean extends Host{
 
     private String token;

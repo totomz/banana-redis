@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javaslang.control.Either;
 import javaslang.control.Try;
@@ -49,7 +48,7 @@ public class RedisAdapter implements Adapter<Object> {
         });
     }
 
-    public static Either<Exception, Object> mapToObject(HashMap<String, String> map) {
+    public static <T> Either<Exception, T> mapToObject(Map<String, String> map) {
 
         try {
             Class clazz = Class.forName(map.get("class"));
@@ -63,7 +62,7 @@ public class RedisAdapter implements Adapter<Object> {
 
                 if (setter != null) {
 
-                    if (setter.isAnnotationPresent(KeyGenerator.class)) {
+                    if ( map.containsKey("@key") && setter.isAnnotationPresent(KeyGenerator.class)) {
                         setter.invoke(obj, map.get("@key"));
                     } 
                     else {
@@ -72,22 +71,21 @@ public class RedisAdapter implements Adapter<Object> {
                         if(value != null) {
                             setter.invoke(obj, value);
                         }
-                        
                     }
 
                 }
             }
 
             // Set the id
-            return Either.right(obj);
+            return Either.right((T)obj);
         } 
         catch (Exception e) {
-            log.warn("Can not deserialize map to object", e);
+            log.warn(e.getMessage(), e);
             return Either.left(e);
         }
     }
 
-    public static Either<Exception, HashMap<String, String>> objToMap(Object t) {
+    public static <T> Either<Exception, HashMap<String, String>> objToMap(T t) {
 
         try {
             HashMap<String, String> objectAsMap = new HashMap<>();
@@ -186,7 +184,29 @@ public class RedisAdapter implements Adapter<Object> {
 
             @Override
             public Stream<T> fromKeys(List<?> keys, QueryOptions options) {
-                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+                try(Jedis jedis = getJedis()){
+                                   
+                    // Get the key-generator method
+                    System.out.println(keys.get(0).getClass());
+                    Method m = Stream.of(keys.get(0).getClass().getMethods())
+                            .filter(mm -> {return mm.isAnnotationPresent(KeyGenerator.class) && mm.getName().startsWith("get") ;})
+                            .findFirst().get();
+                    
+                    return (Stream<T>) javaslang.collection.Stream.ofAll(keys)
+                            .map(obj ->{return Try.of(() -> {                    
+                                return m.invoke(obj).toString();}).get();
+                            })                            
+                            .map(jedis::hgetAll)
+                            .filter(map -> {return !map.isEmpty();})
+                            .map(RedisAdapter::mapToObject)
+                            .map(Either::get)                            
+                            .toJavaStream();                    
+                }
+                catch(Exception e) {
+                    log.error(e.getMessage(), e);
+                }
+                
+                return Stream.empty();
             }
 
             @Override
@@ -246,3 +266,4 @@ public class RedisAdapter implements Adapter<Object> {
     }
 
 }
+

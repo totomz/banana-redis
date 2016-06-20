@@ -31,6 +31,7 @@ public class Host {
         this.commonProperty = commonProperty;
     }
 
+    // setter and getter to go do this.id --> redis:key
     @KeyGenerator
     public String getHostnameKey() {
         return "host:" + hostname;
@@ -38,7 +39,7 @@ public class Host {
     
     @KeyGenerator
     public void setHostnameKey(String key) {
-        this.hostname = key.split(":")[1];
+        this.hostname = key.split(":")[1];            
     }
 
     public String getHostname() {

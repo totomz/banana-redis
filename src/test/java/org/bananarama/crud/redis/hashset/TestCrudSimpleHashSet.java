@@ -1,4 +1,4 @@
-package org.bananarama.redis.hashset;
+package org.bananarama.crud.redis.hashset;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.bananarama.BananaRama;
-import org.bananarama.redis.Utils;
-import org.bananarama.redis.entities.GoogleHost;
-import org.bananarama.redis.entities.DigitalOcean;
-import org.bananarama.redis.entities.Host;
+import org.bananarama.crud.redis.Utils;
+import org.bananarama.crud.redis.entities.GoogleHost;
+import org.bananarama.crud.redis.entities.DigitalOcean;
+import org.bananarama.crud.redis.entities.Host;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -96,7 +96,7 @@ public class TestCrudSimpleHashSet {
                     log.info("Testing " + hostname);
 
                     jedis.hset(redisKey, "aFieldThatDoesNotExists", "nonono");
-                    jedis.hset(redisKey, "class", "org.bananarama.redis.entities.GoogleHost");        
+                    jedis.hset(redisKey, "class", GoogleHost.class.getCanonicalName());
                     jedis.hset(redisKey, "commonProperty", "lorem impsum");
                     jedis.hset(redisKey, "sparse", "4230.423");
                     jedis.hset(redisKey, "hostname", hostname);

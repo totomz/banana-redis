@@ -49,7 +49,7 @@ public class RedisAdapter implements Adapter<Object> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> Optional<T> mapToObject(Map<String, String> map) {
+    protected static <T> Optional<T> mapToObject(Map<String, String> map) {
 
         try {
             Class clazz = Class.forName(map.get("class"));
@@ -86,7 +86,7 @@ public class RedisAdapter implements Adapter<Object> {
         }
     }
 
-    public static <T> Optional<HashMap<String, String>> objToMap(T t) {
+    protected static <T> Optional<HashMap<String, String>> objToMap(T t) {
 
         try {
             HashMap<String, String> objectAsMap = new HashMap<>();

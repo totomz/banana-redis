@@ -1,4 +1,4 @@
-package org.bananarama.redis.entities;
+package org.bananarama.crud.redis.entities;
 
 import org.bananarama.annotation.Banana;
 import org.bananarama.crud.redis.RedisAdapter;

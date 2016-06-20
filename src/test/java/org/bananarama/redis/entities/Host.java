@@ -4,14 +4,11 @@ import org.bananarama.annotation.Banana;
 import org.bananarama.crud.redis.RedisAdapter;
 import org.bananarama.crud.redis.annotations.KeyGenerator;
 
-/**
- * 
- * @author Tommaso Doninelli
- */
 @Banana(adapter = RedisAdapter.class)
 public class Host {
     
-    // This will be the id
+    // This field contains the id of the instance. No need to annotat ethis field,
+    // in Redis we create the key using other methods
     private String hostname;
             
     private String commonProperty;
@@ -31,12 +28,14 @@ public class Host {
         this.commonProperty = commonProperty;
     }
 
-    // setter and getter to go do this.id --> redis:key
+    // This annotation identify the method to use to convert the instance id to 
+    // the string to use as key in redis
     @KeyGenerator
     public String getHostnameKey() {
         return "host:" + hostname;
     }
     
+    // We have to annotate both the setter and the getter. 
     @KeyGenerator
     public void setHostnameKey(String key) {
         this.hostname = key.split(":")[1];            

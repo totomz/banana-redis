@@ -85,7 +85,7 @@ Inheritance is implemented, see the tests.
 * Fields are ignored, only public properties are serialized/deserialized
 * An object can have only simple types (no list or objects as properties)
 * Only direct inheritance is supported 
-* Instances must be `POJO`
+* Instances must be "pojo"s
 
 # Roadmap
 

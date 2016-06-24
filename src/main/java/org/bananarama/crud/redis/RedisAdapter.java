@@ -1,25 +1,34 @@
 package org.bananarama.crud.redis;
 
 import com.googlecode.cqengine.query.option.QueryOptions;
+
+import javaslang.Tuple2;
+
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.time.ZonedDateTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
+
+import org.bananarama.BananaRama;
 import org.bananarama.crud.Adapter;
 import org.bananarama.crud.CreateOperation;
 import org.bananarama.crud.DeleteOperation;
 import org.bananarama.crud.ReadOperation;
 import org.bananarama.crud.UpdateOperation;
 import org.bananarama.crud.redis.annotations.KeyGenerator;
+import org.bananarama.crud.redis.annotations.RedisKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -38,28 +47,32 @@ public abstract class RedisAdapter implements Adapter<Object> {
 
     private static final Logger log = LoggerFactory.getLogger(RedisAdapter.class);
 
+    
     // toValue = castmap(toClass).apply(fromValue)
     private static final HashMap<String, Function<String, Object>> castStringMap = new HashMap<>();
 
     static {
-        castStringMap.put("java.lang.Double", (s) -> {
-            return Double.parseDouble(s);
-        });
-        castStringMap.put("double", (s) -> {
-            return Double.parseDouble(s);
-        });
-        castStringMap.put("java.lang.String", (s) -> {
-            return s;
-        });
+        castStringMap.put("java.lang.Double", (s) -> {return Double.parseDouble(s);});
+        castStringMap.put("double", (s) -> {return Double.parseDouble(s);});
+        castStringMap.put("java.lang.String", (s) -> {return s;});
+        castStringMap.put("java.time.ZonedDateTime", (s) -> {return ZonedDateTime.parse(s);});
     }
 
     @SuppressWarnings("unchecked")
     protected static <T> Optional<T> mapToObject(Map<String, String> map) {
-
+    	
         try {
             Class clazz = Class.forName(map.get("class"));
             Object obj = clazz.newInstance();
-
+          
+            Tuple2<String, Field> key =
+	            Arrays.stream(clazz.getDeclaredFields())
+	            .filter(f -> {return f.isAnnotationPresent(RedisKey.class);})
+	            .map(field -> {return new Tuple2<String, Field>(field.getDeclaredAnnotation(RedisKey.class).value(), field);})
+	            .findFirst()
+	            .get();
+            
+            
             BeanInfo info = Introspector.getBeanInfo(clazz);
             for (PropertyDescriptor pd : info.getPropertyDescriptors()) {
 
@@ -69,10 +82,20 @@ public abstract class RedisAdapter implements Adapter<Object> {
                 if (setter != null) {
 
                     if ( map.containsKey("@key") && setter.isAnnotationPresent(KeyGenerator.class)) {
+                    	
+                    	0.
+                    	
+                    	key._2.set(setter, keyValue);
+                    	
                         setter.invoke(obj, map.get("@key"));
                     } 
                     else {
                         Type t = setter.getGenericParameterTypes()[0];
+                        
+                        if(!castStringMap.containsKey(t.getTypeName())) {
+                        	throw new RuntimeException("Missing mapping for objectType " + t.getTypeName());
+                        }
+                        
                         Object value = castStringMap.get(t.getTypeName()).apply(map.get(pd.getName()));
                         if(value != null) {
                             setter.invoke(obj, value);
@@ -103,6 +126,7 @@ public abstract class RedisAdapter implements Adapter<Object> {
                     String pname = reader.isAnnotationPresent(KeyGenerator.class) ? "@key" : pd.getName();
                     objectAsMap.put(pname, reader.invoke(t).toString());
                 }
+                
             }
             return Optional.of(objectAsMap);
         } 
@@ -192,17 +216,10 @@ public abstract class RedisAdapter implements Adapter<Object> {
             @SuppressWarnings("unchecked")
             public Stream<T> fromKeys(List<?> keys, QueryOptions options) {
                 try(Jedis jedis = getJedis()){
-                                   
-                    // Get the key-generator method
-                    System.out.println(keys.get(0).getClass());
-                    Method m = Stream.of(keys.get(0).getClass().getMethods())
-                            .filter(mm -> {return mm.isAnnotationPresent(KeyGenerator.class) && mm.getName().startsWith("get") ;})
-                            .findFirst().get();
-                    
-                    return (Stream<T>) keys.stream().map(obj -> {
-                        try{return m.invoke(obj).toString();}
-                        catch(IllegalAccessException | IllegalArgumentException | InvocationTargetException e){log.error(e.getMessage(), e); return null;}
-                    }).map(jedis::hgetAll)
+                      	
+                    return (Stream<T>) keys.stream()
+                    .map(Object::toString)
+            		.map(jedis::hgetAll)
                     .filter(map -> {return !map.isEmpty();})
                     .map(RedisAdapter::mapToObject)
                     .filter(Optional::isPresent)

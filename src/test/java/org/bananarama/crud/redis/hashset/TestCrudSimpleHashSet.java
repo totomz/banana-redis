@@ -1,4 +1,4 @@
-package org.bananarama.redis.hashset;
+package org.bananarama.crud.redis.hashset;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.bananarama.BananaRama;
-import org.bananarama.redis.Utils;
-import org.bananarama.redis.entities.GoogleHost;
-import org.bananarama.redis.entities.DigitalOcean;
-import org.bananarama.redis.entities.Host;
+import org.bananarama.crud.redis.Utils;
+import org.bananarama.crud.redis.entities.GoogleHost;
+import org.bananarama.crud.redis.entities.DigitalOcean;
+import org.bananarama.crud.redis.entities.Host;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -32,6 +32,7 @@ public class TestCrudSimpleHashSet {
     
     private Jedis jedis;
     private BananaRama banana;
+    
     @Before
     public void startup() {
         jedis = new Jedis();
@@ -44,7 +45,7 @@ public class TestCrudSimpleHashSet {
         banana = new BananaRama();
     }
     
-//    @Test
+    @Test
     public void testCreate() throws Exception {
         
         // CREATE
@@ -65,7 +66,7 @@ public class TestCrudSimpleHashSet {
 
     }
     
-//    @Test
+    @Test
     public void testDelete() {
         
         jedis.hset("host:google-01", "aFieldThatDoesNotExists", "nonono");
@@ -87,34 +88,37 @@ public class TestCrudSimpleHashSet {
     @Test    
     public void testRead() {
         
-        /*
-        127.0.0.1:6379> HGETALL host:ocean-820
-        1) "commonProperty"
-        2) "ocean-common"
-        3) "hostname"
-        4) "ocean-820"
-        5) "class"
-        6) "class org.bananarama.redis.entities.DigitalOcean"
-        7) "token"
-        8) "08f97sa0f9yds908gb"
-
-        */
         jedis.scan("0", new ScanParams().match("host:*")).getResult().forEach(jedis::del);
         
-        jedis.hset("host:google-01", "aFieldThatDoesNotExists", "nonono");
-        jedis.hset("host:google-01", "class", "org.bananarama.redis.entities.GoogleHost");        
-        jedis.hset("host:google-01", "commonProperty", "lorem impsum");
-        jedis.hset("host:google-01", "sparse", "4230.423");
-        jedis.hset("host:google-01", "hostname", "google-01");
-        jedis.hset("host:google-01", "credentialFile", "8923y7 9ryfh9 dshfvp9asdh vpz \\xc3\\xa8");
-        jedis.hset("host:google-01", "ttl", "742389.7589234");
-        
-        List<GoogleHost> hosts = banana.read(GoogleHost.class).fromKeys(Collections.singletonList("google-01")).collect(Collectors.toList());
-        
-        Assert.assertNull(hosts);
-        Assert.assertEquals(1, hosts.size());
-        
-        banana.read(GoogleHost.class).all().forEach(System.out::println);
+        Stream.of("www.pippo.com", "google-01", "uno.due.tre.jack:8080")
+                .forEach(hostname -> {
+                    String redisKey = "host:" + hostname;
+                    log.info("Testing " + hostname);
+
+                    jedis.hset(redisKey, "aFieldThatDoesNotExists", "nonono");
+                    jedis.hset(redisKey, "class", GoogleHost.class.getCanonicalName());
+                    jedis.hset(redisKey, "commonProperty", "lorem impsum");
+                    jedis.hset(redisKey, "sparse", "4230.423");
+                    jedis.hset(redisKey, "hostname", hostname);
+                    jedis.hset(redisKey, "credentialFile", "8923y7 9ryfh9 dshfvp9asdh vpz \\xc3\\xa8");
+                    jedis.hset(redisKey, "ttl", "742389.7589234");
+
+                    Assert.assertEquals(0, banana.read(GoogleHost.class).fromKeys(Host.keys(hostname + "_wrong")).count());
+
+                    List<GoogleHost> hosts = banana.read(GoogleHost.class).fromKeys(Host.keys(hostname)).collect(Collectors.toList());
+ 
+                    Assert.assertNotNull(hosts);
+                    Assert.assertEquals(1, hosts.size());
+
+                    GoogleHost host = hosts.get(0);
+                    Assert.assertEquals("lorem impsum", host.getCommonProperty());
+                    Assert.assertEquals(4230.423, host.getSparse(), 0.0001);
+                    Assert.assertEquals("lorem impsum", host.getCommonProperty());
+                    Assert.assertEquals("8923y7 9ryfh9 dshfvp9asdh vpz \\xc3\\xa8", host.getCredentialFile());
+                    Assert.assertEquals(hostname, host.getHostname());
+
+                    jedis.del(redisKey);
+                });
             
     }
 

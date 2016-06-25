@@ -1,19 +1,22 @@
-package org.bananarama.redis.entities;
+package org.bananarama.crud.redis.entities;
+
+import java.util.List;
 
 import org.bananarama.annotation.Banana;
-import org.bananarama.crud.redis.RedisAdapter;
+import org.bananarama.crud.redis.RedisAdapterImpl;
+import org.bananarama.crud.redis.annotations.KeyGenerator;
 
 /**
  * 
  * @author Tommaso Doninelli
  */
-@Banana(adapter = RedisAdapter.class)
+@Banana(adapter = RedisAdapterImpl.class)
 public class GoogleHost  extends Host {
 
     private String contents;
     private Double ttl = 983.84;
     private double sparse = 4230.423;
-
+    
     public GoogleHost() {}
     
     public GoogleHost(String id) {
@@ -44,6 +47,5 @@ public class GoogleHost  extends Host {
         this.sparse = sparse;
     }
 
-    
     
 }

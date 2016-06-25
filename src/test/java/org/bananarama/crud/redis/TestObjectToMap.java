@@ -1,13 +1,9 @@
-package org.bananarama.redis;
+package org.bananarama.crud.redis;
 
 import java.util.HashMap;
-import org.bananarama.crud.redis.RedisAdapter;
-import static org.bananarama.redis.Utils.GOOGLE_TTL;
-import org.bananarama.redis.entities.DigitalOcean;
-import org.bananarama.redis.entities.GoogleHost;
+import org.bananarama.crud.redis.entities.GoogleHost;
 import org.junit.Assert;
 import org.junit.Test;
-import redis.clients.jedis.Jedis;
 
 /**
  * 
@@ -20,7 +16,7 @@ public class TestObjectToMap {
         
         HashMap<String, String> map = RedisAdapter
                 .objToMap(Utils.generateGoogleHost("ciaone"))
-                .getOrElseThrow(t -> t);
+                .orElseThrow(Exception::new);
         
 //        map.forEach((k, v) -> {System.out.println(k + "--> " + v);});
         
@@ -32,23 +28,23 @@ public class TestObjectToMap {
         // Test the id agains a different object
         HashMap<String, String> map2 = RedisAdapter
                 .objToMap(Utils.generateDigitalOceanHost("digiciccio"))
-                .getOrElseThrow(t -> t);
+                .orElseThrow(Exception::new);
         
         Assert.assertEquals("host:digiciccio", map2.get("@key"));
     }
 
     @Test
     public void fromMapToObject() throws Exception {
-        
+                
         HashMap<String, String> map = new HashMap<>();
         map.put("@key", "host:antonello");
         map.put("commonProperty", "this is sparta!");
         map.put("ttl", "156.8792398437");
         map.put("credentialFile", "this is the content of a file: )");
         map.put("sparse", "27.85");
-        map.put("class", "org.bananarama.redis.entities.GoogleHost");
+        map.put("class", GoogleHost.class.getCanonicalName());
         
-        GoogleHost host = (GoogleHost)RedisAdapter.mapToObject(map).getOrElseThrow(t -> t);
+        GoogleHost host = (GoogleHost)RedisAdapter.mapToObject(map).orElseThrow(Exception::new);
         
         Assert.assertNotNull(host);
         Assert.assertEquals("antonello", host.getHostname());

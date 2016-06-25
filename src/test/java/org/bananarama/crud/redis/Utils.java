@@ -1,7 +1,7 @@
-package org.bananarama.redis;
+package org.bananarama.crud.redis;
 
-import org.bananarama.redis.entities.DigitalOcean;
-import org.bananarama.redis.entities.GoogleHost;
+import org.bananarama.crud.redis.entities.DigitalOcean;
+import org.bananarama.crud.redis.entities.GoogleHost;
 
 /**
  * 

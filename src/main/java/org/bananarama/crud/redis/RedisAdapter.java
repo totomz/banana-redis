@@ -7,6 +7,7 @@ import java.beans.PropertyDescriptor;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,9 +73,7 @@ public class RedisAdapter implements Adapter<Object> {
                         if(value != null) {
                             setter.invoke(obj, value);
                         }
-                        
                     }
-
                 }
             }
 
@@ -186,6 +185,23 @@ public class RedisAdapter implements Adapter<Object> {
 
             @Override
             public Stream<T> fromKeys(List<?> keys, QueryOptions options) {
+                try(Jedis jedis = getJedis();
+                        Pipeline pipe = jedis.pipelined()) {
+                    
+                    keys.stream().map(k -> {
+                        Arrays.stream(k.getClass().getMethods())
+                                .filter((m) -> {return m.isAnnotationPresent(KeyGenerator.class);})
+                                .findFirst()
+                                .orElseThrow(new RuntimeException("Annotation " + KeyGenerator.class + " not found for class " + k.toString() ));
+                                
+                        return null;
+                    });
+                    
+                }
+                catch (Exception e) {
+                    log.error(e.getMessage(), e);
+                }
+                
                 throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
             }
 

@@ -2,9 +2,8 @@ package org.bananarama.crud.redis;
 
 import com.googlecode.cqengine.query.option.QueryOptions;
 
-import javaslang.Tuple2;
-
 import java.beans.BeanInfo;
+import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.io.IOException;
@@ -12,19 +11,17 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-<<<<<<< HEAD
-=======
 import java.time.ZonedDateTime;
->>>>>>> 64ddf62e457da596685237925e7beb841060ea52
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
+import javaslang.control.Either;
 
-import org.bananarama.BananaRama;
 import org.bananarama.crud.Adapter;
 import org.bananarama.crud.CreateOperation;
 import org.bananarama.crud.DeleteOperation;
@@ -38,150 +35,213 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
 
 /**
- * Simple adapter for CRUD operations of objects saved as HashSet in a redis db. 
- * 
- * Each instance must have an unique identifier, and getter/setter methods annotated with {@link KeyGenerator} that are used to convert the
- * instance id in a custom redis key; eg the class Host has a unique id the string "www.web.com", and the equivalent redis key is in the form "host:www.web.com:key"
- * 
- * This class is abstract; the implementations must provide the necessary connection string to the redis instance
+ * Simple adapter for CRUD operations of objects saved as HashSet in a redis db.
+ *
+ * Each instance must have an unique identifier, and getter/setter methods
+ * annotated with {@link KeyGenerator} that are used to convert the instance id
+ * in a custom redis key; eg the class Host has a unique id the string
+ * "www.web.com", and the equivalent redis key is in the form
+ * "host:www.web.com:key"
+ *
+ * This class is abstract; the implementations must provide the necessary
+ * connection string to the redis instance
+ *
  * @author Tommaso Doninelli
  */
 public abstract class RedisAdapter implements Adapter<Object> {
 
     private static final Logger log = LoggerFactory.getLogger(RedisAdapter.class);
 
-    
     // toValue = castmap(toClass).apply(fromValue)
     private static final HashMap<String, Function<String, Object>> castStringMap = new HashMap<>();
+    private static final ConcurrentHashMap<Class, InstanceKey> keyGeneratorsMap = new ConcurrentHashMap<>();
 
     static {
-        castStringMap.put("java.lang.Double", (s) -> {return Double.parseDouble(s);});
-        castStringMap.put("double", (s) -> {return Double.parseDouble(s);});
-        castStringMap.put("java.lang.String", (s) -> {return s;});
-        castStringMap.put("java.time.ZonedDateTime", (s) -> {return ZonedDateTime.parse(s);});
+        castStringMap.put("java.lang.Double", (s) -> {
+            return Double.parseDouble(s);
+        });
+        castStringMap.put("double", (s) -> {
+            return Double.parseDouble(s);
+        });
+        castStringMap.put("java.lang.String", (s) -> {
+            return s;
+        });
+        castStringMap.put("java.time.ZonedDateTime", (s) -> {
+            return ZonedDateTime.parse(s);
+        });
     }
 
+    /**
+     * Convert a {@link Map<String, String>) to an object. The instance class
+     * must be specified using the fqdn class name as value for the key class.
+     *
+     * @param <T>
+     * @param map
+     * @return
+     */
     @SuppressWarnings("unchecked")
-    protected static <T> Optional<T> mapToObject(Map<String, String> map) {
-    	
+    protected static <T> Either<Exception, T> mapToObject(Map<String, String> map) {
+
         try {
-            Class clazz = Class.forName(map.get("class"));
+            Class<?> clazz = Class.forName(map.get("class"));
+            InstanceKey key = getKey(clazz);        // The field to use to parse the redis key
             Object obj = clazz.newInstance();
-          
-            Tuple2<String, Field> key =
-	            Arrays.stream(clazz.getDeclaredFields())
-	            .filter(f -> {return f.isAnnotationPresent(RedisKey.class);})
-	            .map(field -> {return new Tuple2<String, Field>(field.getDeclaredAnnotation(RedisKey.class).value(), field);})
-	            .findFirst()
-	            .get();
-            
-            
+
             BeanInfo info = Introspector.getBeanInfo(clazz);
             for (PropertyDescriptor pd : info.getPropertyDescriptors()) {
 
                 Method setter = pd.getWriteMethod();
-                String property = pd.getName();         // This is the name of the property represented by the getter/setter! not the field, not the method name!
 
                 if (setter != null) {
+                    Type t = setter.getGenericParameterTypes()[0];
 
-                    if ( map.containsKey("@key") && setter.isAnnotationPresent(KeyGenerator.class)) {
-                    	
-                    	0.
-                    	
-                    	key._2.set(setter, keyValue);
-                    	
-                        setter.invoke(obj, map.get("@key"));
-                    } 
-                    else {
-                        Type t = setter.getGenericParameterTypes()[0];
-                        
-                        if(!castStringMap.containsKey(t.getTypeName())) {
-                        	throw new RuntimeException("Missing mapping for objectType " + t.getTypeName());
-                        }
-                        
-                        Object value = castStringMap.get(t.getTypeName()).apply(map.get(pd.getName()));
-                        if(value != null) {
-                            setter.invoke(obj, value);
-                        }
+                    if (!castStringMap.containsKey(t.getTypeName())) {
+                        throw new RuntimeException("Missing mapping for objectType " + t.getTypeName());
+                    }
+
+                    Object value = castStringMap.get(t.getTypeName()).apply(map.get(pd.getName()));
+                    if (value != null) {
+                        setter.invoke(obj, value);
                     }
                 }
             }
+            
+            // Set the id **bypassing the setter** (easier, and currently it seems what we need....)
+            String value = extractKey(map.get("@key"), key.regex);
+            boolean access = key.field.isAccessible();
+            key.field.setAccessible(true);
+            key.field.set(obj, value);
+            key.field.setAccessible(access);
 
             // Set the id
-            return Optional.of((T)obj);
-        } 
-        catch (Exception e) {
+            return Either.right((T) obj);
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IntrospectionException | RuntimeException | InvocationTargetException e) {
             log.warn(e.getMessage(), e);
-            return Optional.empty();
+            return Either.left(e);
         }
     }
+    
 
-    protected static <T> Optional<HashMap<String, String>> objToMap(T t) {
+    /**
+     * Convert an instance of T in a {@link Map<String, String>}. The instance
+     * FQDN class is saved as value for the key "class". This method expects
+     * that the class T has a field marked with {@link RedisKey}; the value of
+     * this field, converted using the patterns specified by the annotation, is
+     * stored using at the key "@id"
+     *
+     * @param <T>
+     * @param t
+     * @return
+     */
+    protected static <T> Either<Exception, Map<String, String>> objToMap(T t) {
+
+        InstanceKey key = getKey(t.getClass());
 
         try {
-            HashMap<String, String> objectAsMap = new HashMap<>();
+            // We can't cache the BeanInfo becase the stream could be of different class with the same parent class
+            Map<String, String> objectAsMap = new HashMap<>();
             BeanInfo info = Introspector.getBeanInfo(t.getClass());
             for (PropertyDescriptor pd : info.getPropertyDescriptors()) {
 
                 Method reader = pd.getReadMethod();
                 if (reader != null) {
-                    String pname = reader.isAnnotationPresent(KeyGenerator.class) ? "@key" : pd.getName();
-                    objectAsMap.put(pname, reader.invoke(t).toString());
+                    objectAsMap.put(pd.getName(), reader.invoke(t).toString());
                 }
-                
+
             }
-            return Optional.of(objectAsMap);
-        } 
-        catch (Exception e) {
+
+            // Remove the field that is the id from the map; 
+            // this field is mapped as @key to be serialized as key. 
+            // Intstead of doing n checks in the for-cycle, we just remove it from the hash once.            
+            objectAsMap.remove(key.fieldName);
+
+            // Set the "special" @id value as defined by the annotation
+            // toString() is not the best but for now it is enough
+            boolean access = key.field.isAccessible();
+            key.field.setAccessible(true);
+            objectAsMap.put("@key", key.regex.replace("$", key.field.get(t).toString()));
+            key.field.setAccessible(access);
+
+            return Either.right(objectAsMap);
+        } catch (IntrospectionException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
             log.warn("Error mapping an object to a map", e);
-            return Optional.empty();
+            return Either.left(e);
         }
     }
 
+    protected static String extractKey(String fromString, String pattern) {
+
+        int patternPos = pattern.indexOf('$');
+        String leftPart = pattern.substring(0, patternPos);
+        String rightPart = pattern.substring(patternPos + 1, pattern.length());
+
+        String result = fromString.replaceFirst(leftPart, "").replaceFirst(rightPart, "");
+        System.out.println(String.format("[%s] - [%s] --> %s", pattern, fromString, result));
+
+        return result;
+    }
+    
+    private static InstanceKey getKey(Class<?> clazz) {
+        if (!keyGeneratorsMap.containsKey(clazz)) {
+            InstanceKey key = Stream.concat(
+                    Arrays.stream(clazz.getDeclaredFields()), // Get the fields fot this class
+                    Stream.of(clazz.getSuperclass()).filter(c -> c != null).map(c -> c.getDeclaredFields()).flatMap(Arrays::stream)) // And from the parents
+                    
+                .filter(f -> f.isAnnotationPresent(RedisKey.class))
+                .map(field -> {return new InstanceKey(field, field.getName(), field.getAnnotation(RedisKey.class).value());})
+                .findFirst().get();
+
+            keyGeneratorsMap.put(clazz, key);
+        }
+
+        return keyGeneratorsMap.get(clazz);
+    }
+    
     /**
-     * The provider for a connection. 
-     * Implementation shall use this method to return a pooled connection, using a custom connection string.
+     * The provider for a connection. Implementation shall use this method to
+     * return a pooled connection, using a custom connection string.
+     *
      * @return a {@link Jedis} connection
      */
     protected abstract Jedis getJedis();
-    
+
     @Override
     public <T> CreateOperation<T> create(Class<T> clazz) {
 
         return new CreateOperation<T>() {
-            
+
             @Override
             public CreateOperation<T> from(Stream<T> data) {
-                
+
                 return from(data, null);
             }
 
             @Override
             public CreateOperation<T> from(Stream<T> data, QueryOptions options) {
-                
-                try(Jedis jedis = getJedis();
-                        Pipeline pipeline = jedis.pipelined()){
-                    
+
+                try (Jedis jedis = getJedis();
+                        Pipeline pipeline = jedis.pipelined()) {
+
                     data.map(RedisAdapter::objToMap) // Convert to hashmap
-                        .filter(Optional::isPresent) // throw away wrong stuff 
-                        .map(Optional::get)
-                        .forEach(mapObj -> {                            
-                            String key = mapObj.get("@key");
-                            mapObj.entrySet().stream()
-                                    .filter(entry -> !entry.getKey().equals("@key") )
-                                    .forEach( entry -> pipeline.hset(key, entry.getKey(), entry.getValue()) );                            
-                        });
+                            .filter(Either::isRight) // throw away wrong stuff                         
+                            .map(Either::get)
+                            .forEach(mapObj -> {
+                                String key = mapObj.get("@key");
+                                mapObj.entrySet().stream()
+                                        .filter(entry -> !entry.getKey().equals("@key"))
+                                        .forEach(entry -> pipeline.hset(key, entry.getKey(), entry.getValue()));
+                            });
                     pipeline.sync();
-                }
-                catch(Exception e) {
+                } catch (Exception e) {
                     log.warn("Error persisting an element", e);
                 }
-                
+
                 return this;
             }
 
             @Override
-            public void close() throws IOException {}
+            public void close() throws IOException {
+            }
         };
 
     }
@@ -217,43 +277,44 @@ public abstract class RedisAdapter implements Adapter<Object> {
             @Override
             @SuppressWarnings("unchecked")
             public Stream<T> fromKeys(List<?> keys, QueryOptions options) {
-<<<<<<< HEAD
-                try(Jedis jedis = getJedis();
-                        Pipeline pipe = jedis.pipelined()) {
-                    
-                    keys.stream().map(k -> {
-                        Arrays.stream(k.getClass().getMethods())
-                                .filter((m) -> {return m.isAnnotationPresent(KeyGenerator.class);})
-                                .findFirst()
-                                .orElseThrow(new RuntimeException("Annotation " + KeyGenerator.class + " not found for class " + k.toString() ));
-                                
-                        return null;
-                    });
-                    
-                }
-                catch (Exception e) {
-                    log.error(e.getMessage(), e);
-                }
-                
-                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-=======
-                try(Jedis jedis = getJedis()){
-                      	
+//<<<<<<< HEAD
+//                try(Jedis jedis = getJedis();
+//                        Pipeline pipe = jedis.pipelined()) {
+//                    
+//                    keys.stream().map(k -> {
+//                        Arrays.stream(k.getClass().getMethods())
+//                                .filter((m) -> {return m.isAnnotationPresent(KeyGenerator.class);})
+//                                .findFirst()
+//                                .orElseThrow(new RuntimeException("Annotation " + KeyGenerator.class + " not found for class " + k.toString() ));
+//                                
+//                        return null;
+//                    });
+//                    
+//                }
+//                catch (Exception e) {
+//                    log.error(e.getMessage(), e);
+//                }
+//                
+//                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+//=======
+                try (Jedis jedis = getJedis()) {
+
                     return (Stream<T>) keys.stream()
-                    .map(Object::toString)
-            		.map(jedis::hgetAll)
-                    .filter(map -> {return !map.isEmpty();})
-                    .map(RedisAdapter::mapToObject)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get);
-                    
-                }
-                catch(Exception e) {
+                            .map(Object::toString)
+                            .map(jedis::hgetAll)
+                            .filter(map -> {
+                                return !map.isEmpty();
+                            })
+                            .map(RedisAdapter::mapToObject)
+                            .filter(Either::isRight)
+                            .map(Either::get);
+
+                } catch (Exception e) {
                     log.error(e.getMessage(), e);
                 }
-                
+
                 return Stream.empty();
->>>>>>> 64ddf62e457da596685237925e7beb841060ea52
+//>>>>>>> 64ddf62e457da596685237925e7beb841060ea52
             }
 
             @Override
@@ -278,28 +339,27 @@ public abstract class RedisAdapter implements Adapter<Object> {
 
             @Override
             public <Q> DeleteOperation<T> where(Q whereClaus, QueryOptions options) {
-                throw new UnsupportedOperationException("Delte with where clause is not supported."); 
+                throw new UnsupportedOperationException("Delte with where clause is not supported.");
             }
 
             @Override
-            public DeleteOperation<T> from(Stream<T> data) {                
+            public DeleteOperation<T> from(Stream<T> data) {
                 return from(data, null);
             }
 
             @Override
             public DeleteOperation<T> from(Stream<T> data, QueryOptions options) {
-                try(Jedis jedis = getJedis();
-                        Pipeline pipeline = jedis.pipelined()){
-                    
+                try (Jedis jedis = getJedis();
+                        Pipeline pipeline = jedis.pipelined()) {
+
                     data.map(RedisAdapter::objToMap) // Convert to hashmap
-                        .filter(Optional::isPresent) // throw away wrong stuff 
-                        .map(Optional::get)
-                        .map(map -> map.get("@key"))
-                        .forEach(pipeline::del);
-                    
+                            .filter(Either::isRight) // throw away wrong stuff                         
+                            .map(Either::get)
+                            .map(map -> map.get("@key"))
+                            .forEach(pipeline::del);
+
                     pipeline.sync();
-                }
-                catch(Exception e) {
+                } catch (Exception e) {
                     log.warn("Error deleting an element", e);
                 }
                 return this;
@@ -314,3 +374,16 @@ public abstract class RedisAdapter implements Adapter<Object> {
 
 }
 
+class InstanceKey {
+
+    protected Field field;
+    protected String fieldName;
+    protected String regex;
+
+    public InstanceKey(Field field, String fieldName, String regex) {
+        this.field = field;
+        this.fieldName = fieldName;
+        this.regex = regex;
+    }
+
+}

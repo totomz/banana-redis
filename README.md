@@ -80,6 +80,9 @@ public class Host {
 ```
 Inheritance is implemented, see the tests. 
 
+METTI UN TEST PER CRUD con bananarama, hai messo solo com'e è annotata la classe!
+banana.read(GoogleHost.class).fromKeys <-- questo è l'id di host, viene poi tradotto in una chiave dall'adapter
+
 # Current limitations
 
 * Fields are ignored, only public properties are serialized/deserialized

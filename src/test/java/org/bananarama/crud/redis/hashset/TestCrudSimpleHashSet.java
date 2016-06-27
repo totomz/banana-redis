@@ -1,5 +1,6 @@
 package org.bananarama.crud.redis.hashset;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -103,9 +104,9 @@ public class TestCrudSimpleHashSet {
                     jedis.hset(redisKey, "credentialFile", "8923y7 9ryfh9 dshfvp9asdh vpz \\xc3\\xa8");
                     jedis.hset(redisKey, "ttl", "742389.7589234");
 
-                    Assert.assertEquals(0, banana.read(GoogleHost.class).fromKeys(Host.keys(hostname + "_wrong")).count());
+                    Assert.assertEquals(0, banana.read(GoogleHost.class).fromKeys(Arrays.asList(hostname + "_wrong")).count());
 
-                    List<GoogleHost> hosts = banana.read(GoogleHost.class).fromKeys(Host.keys(hostname)).collect(Collectors.toList());
+                    List<GoogleHost> hosts = banana.read(GoogleHost.class).fromKeys(Arrays.asList(hostname)).collect(Collectors.toList());
  
                     Assert.assertNotNull(hosts);
                     Assert.assertEquals(1, hosts.size());

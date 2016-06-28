@@ -100,7 +100,6 @@ public class TestCrudSimpleHashSet {
                     jedis.hset(redisKey, "class", GoogleHost.class.getCanonicalName());
                     jedis.hset(redisKey, "commonProperty", "lorem impsum");
                     jedis.hset(redisKey, "sparse", "4230.423");
-                    jedis.hset(redisKey, "hostname", hostname);
                     jedis.hset(redisKey, "credentialFile", "8923y7 9ryfh9 dshfvp9asdh vpz \\xc3\\xa8");
                     jedis.hset(redisKey, "ttl", "742389.7589234");
 
@@ -121,6 +120,55 @@ public class TestCrudSimpleHashSet {
                     jedis.del(redisKey);
                 });
             
+    }
+    
+    @Test    
+    public void testReadInheritance() {
+        
+        jedis.scan("0", new ScanParams().match("host:*")).getResult().forEach(jedis::del);
+        
+        // If we put 2 object with the same parent class
+        
+        Stream.of(GoogleHost.class.getCanonicalName(), DigitalOcean.class.getCanonicalName())
+                .forEach(hostname -> {
+                    String redisKey = "host:" + hostname;
+                    log.info("Testing " + hostname);
+
+                    jedis.hset(redisKey, "aFieldThatDoesNotExists", "nonono");
+                    jedis.hset(redisKey, "class", hostname);
+                    jedis.hset(redisKey, "commonProperty", "lorem impsum");
+                    jedis.hset(redisKey, "sparse", "4230.423");
+//                    jedis.hset(redisKey, "hostname", hostname);
+                    jedis.hset(redisKey, "credentialFile", "8923y7 9ryfh9 dshfvp9asdh vpz \\xc3\\xa8");
+                    jedis.hset(redisKey, "ttl", "742389.7589234");
+
+//                    Assert.assertEquals(0, banana.read(GoogleHost.class).fromKeys(Arrays.asList(hostname + "_wrong")).count());
+//
+//                    List<GoogleHost> hosts = banana.read(GoogleHost.class).fromKeys(Arrays.asList(hostname)).collect(Collectors.toList());
+// 
+//                    Assert.assertNotNull(hosts);
+//                    Assert.assertEquals(1, hosts.size());
+//
+//                    GoogleHost host = hosts.get(0);
+//                    Assert.assertEquals("lorem impsum", host.getCommonProperty());
+//                    Assert.assertEquals(4230.423, host.getSparse(), 0.0001);
+//                    Assert.assertEquals("lorem impsum", host.getCommonProperty());
+//                    Assert.assertEquals("8923y7 9ryfh9 dshfvp9asdh vpz \\xc3\\xa8", host.getCredentialFile());
+//                    Assert.assertEquals(hostname, host.getHostname());
+//
+//                    jedis.del(redisKey);
+                });
+        
+        // If we request the base class, we expect to have all the instances
+        List<String> all = Arrays.asList(GoogleHost.class.getCanonicalName(), DigitalOcean.class.getCanonicalName());
+        Assert.assertEquals(2, banana.read(Host.class).fromKeys(all).count());
+        
+        // But when we request a specific type, we must filter out instance that does not match
+        Assert.assertEquals(1, banana.read(GoogleHost.class).fromKeys(all).count());
+        Assert.assertEquals(1, banana.read(DigitalOcean.class).fromKeys(all).count());
+        
+        // When we read using keys, we MUST use the "inner value" of the field used as kye - NOT the redis key
+//        List<String> all = Arrays.asList("host:"+GoogleHost.class.getCanonicalName(), "host:"+DigitalOcean.class.getCanonicalName());
     }
 
 }

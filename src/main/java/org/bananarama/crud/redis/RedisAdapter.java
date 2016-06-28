@@ -248,6 +248,9 @@ public abstract class RedisAdapter implements Adapter<Object> {
 
     @Override
     public <T> ReadOperation<T> read(Class<T> clazz) {
+        
+        Class<T> type = clazz;
+        
         return new ReadOperation<T>() {
             @Override
             public Stream<T> all() {
@@ -301,10 +304,21 @@ public abstract class RedisAdapter implements Adapter<Object> {
 
                     return (Stream<T>) keys.stream()
                             .map(Object::toString)
-                            .map(jedis::hgetAll)
-                            .filter(map -> {
-                                return !map.isEmpty();
+//                            .map(s ->{
+//                                System.out.println(":::"+s);
+//                                return s;
+//                            })
+                            .map(s -> {
+                                InstanceKey key = getKey(type);
+                                System.out.println("##" + key.regex.replace("$", s));
+                                return key.regex.replace("$", s);
                             })
+                            .map(key -> {
+                                Map<String, String> map = jedis.hgetAll(key);
+                                map.put("@key", key);
+                                return map;
+                            })
+                            .filter(map -> {return !map.isEmpty();})
                             .map(RedisAdapter::mapToObject)
                             .filter(Either::isRight)
                             .map(Either::get);

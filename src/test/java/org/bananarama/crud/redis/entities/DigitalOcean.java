@@ -12,6 +12,9 @@ public class DigitalOcean extends Host{
 
     private String token;
 
+    
+    public DigitalOcean() {}
+    
     public DigitalOcean(String id) {
         super(id);
     }

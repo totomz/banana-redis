@@ -1,10 +1,7 @@
 package org.bananarama.crud.redis.entities;
 
-import java.util.List;
-
 import org.bananarama.annotation.Banana;
 import org.bananarama.crud.redis.RedisAdapterImpl;
-import org.bananarama.crud.redis.annotations.KeyGenerator;
 
 /**
  * 

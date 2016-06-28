@@ -1,7 +1,5 @@
 package org.bananarama.crud.redis;
 
-import com.googlecode.cqengine.query.option.QueryOptions;
-
 import java.beans.BeanInfo;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
@@ -13,24 +11,25 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
-import javaslang.control.Either;
 
 import org.bananarama.crud.Adapter;
 import org.bananarama.crud.CreateOperation;
 import org.bananarama.crud.DeleteOperation;
 import org.bananarama.crud.ReadOperation;
 import org.bananarama.crud.UpdateOperation;
-import org.bananarama.crud.redis.annotations.KeyGenerator;
 import org.bananarama.crud.redis.annotations.RedisKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.googlecode.cqengine.query.option.QueryOptions;
+
+import javaslang.control.Either;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
 
@@ -54,7 +53,7 @@ public abstract class RedisAdapter implements Adapter<Object> {
 
     // toValue = castmap(toClass).apply(fromValue)
     private static final HashMap<String, Function<String, Object>> castStringMap = new HashMap<>();
-    private static final ConcurrentHashMap<Class, InstanceKey> keyGeneratorsMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, InstanceKey> keyGeneratorsMap = new ConcurrentHashMap<>();
 
     static {
         castStringMap.put("java.lang.Double", (s) -> {
@@ -82,6 +81,12 @@ public abstract class RedisAdapter implements Adapter<Object> {
     @SuppressWarnings("unchecked")
     protected static <T> Either<Exception, T> mapToObject(Map<String, String> map) {
 
+        // XXX A functional way could be better; a future improvement
+//        Object obj = 
+//                Try.of(() -> {return Class.forName(map.get("class"));})
+//                .mapTry( (clazz) -> {return clazz.newInstance();}).onFailure(x -> {throw new Exception("Probably an empty default construtor is missing?", x);})
+//                .get();
+        
         try {
             Class<?> clazz = Class.forName(map.get("class"));
             InstanceKey key = getKey(clazz);        // The field to use to parse the redis key
@@ -115,8 +120,13 @@ public abstract class RedisAdapter implements Adapter<Object> {
 
             // Set the id
             return Either.right((T) obj);
-        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IntrospectionException | RuntimeException | InvocationTargetException e) {
-            log.warn(e.getMessage(), e);
+        }
+        catch (InstantiationException e) {
+            log.error("Can not instantiate " + map.get("class") + "; does it have a public noargs constructor?", e); // In this case we have to provide usefull hints to the user
+            return Either.left(e);
+        }
+        catch (ClassNotFoundException | IllegalAccessException | IntrospectionException | RuntimeException | InvocationTargetException e) {
+//            log.error(e.getMessage(), e); // No need to lo gerrors, since we can return them; the caller will ignore, or do whatever he wants
             return Either.left(e);
         }
     }
@@ -176,7 +186,8 @@ public abstract class RedisAdapter implements Adapter<Object> {
         String rightPart = pattern.substring(patternPos + 1, pattern.length());
 
         String result = fromString.replaceFirst(leftPart, "").replaceFirst(rightPart, "");
-        System.out.println(String.format("[%s] - [%s] --> %s", pattern, fromString, result));
+        
+//        System.out.println(String.format("[%s] - [%s] --> %s", pattern, fromString, result));
 
         return result;
     }
@@ -280,26 +291,7 @@ public abstract class RedisAdapter implements Adapter<Object> {
             @Override
             @SuppressWarnings("unchecked")
             public Stream<T> fromKeys(List<?> keys, QueryOptions options) {
-//<<<<<<< HEAD
-//                try(Jedis jedis = getJedis();
-//                        Pipeline pipe = jedis.pipelined()) {
-//                    
-//                    keys.stream().map(k -> {
-//                        Arrays.stream(k.getClass().getMethods())
-//                                .filter((m) -> {return m.isAnnotationPresent(KeyGenerator.class);})
-//                                .findFirst()
-//                                .orElseThrow(new RuntimeException("Annotation " + KeyGenerator.class + " not found for class " + k.toString() ));
-//                                
-//                        return null;
-//                    });
-//                    
-//                }
-//                catch (Exception e) {
-//                    log.error(e.getMessage(), e);
-//                }
-//                
-//                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-//=======
+                
                 try (Jedis jedis = getJedis()) {
 
                     return (Stream<T>) keys.stream()
@@ -308,27 +300,24 @@ public abstract class RedisAdapter implements Adapter<Object> {
 //                                System.out.println(":::"+s);
 //                                return s;
 //                            })
-                            .map(s -> {
-                                InstanceKey key = getKey(type);
-                                System.out.println("##" + key.regex.replace("$", s));
-                                return key.regex.replace("$", s);
-                            })
+                            .map(s -> {return getKey(type).regex.replace("$", s);})
                             .map(key -> {
                                 Map<String, String> map = jedis.hgetAll(key);
                                 map.put("@key", key);
                                 return map;
                             })
-                            .filter(map -> {return !map.isEmpty();})
+                            .filter(map -> {return !map.isEmpty();})                            
                             .map(RedisAdapter::mapToObject)
-                            .filter(Either::isRight)
-                            .map(Either::get);
+                            .filter(Either::isRight)                    // Returning only valid results, but where are we handling the errors?                            
+                            .map(Either::get)
+                            .filter(type::isInstance)                   // Return only types that match the required class
+                            ;
 
                 } catch (Exception e) {
                     log.error(e.getMessage(), e);
                 }
 
                 return Stream.empty();
-//>>>>>>> 64ddf62e457da596685237925e7beb841060ea52
             }
 
             @Override

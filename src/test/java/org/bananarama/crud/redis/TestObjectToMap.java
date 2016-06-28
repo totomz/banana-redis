@@ -2,9 +2,9 @@ package org.bananarama.crud.redis;
 
 import java.util.HashMap;
 import java.util.Map;
+
 import org.bananarama.crud.redis.entities.GoogleHost;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 /**
@@ -26,12 +26,12 @@ public class TestObjectToMap {
         Assert.assertEquals(Utils.GOOGLE_CREFILEVALUE, map.get("credentialFile"));
         Assert.assertEquals(Double.toString(Utils.GOOGLE_TTL), map.get("ttl"));
         
-        // Test the id agains a different object
+        // Test the id against a different object
         Map<String, String> map2 = RedisAdapter
                 .objToMap(Utils.generateDigitalOceanHost("digiciccio"))
                 .get();
         
-//        Assert.assertEquals("host:digiciccio", map2.get("@key"));
+        Assert.assertEquals("host:digiciccio", map2.get("@key"));
     }
 
     @Test

@@ -68,15 +68,18 @@ public abstract class RedisAdapter implements Adapter<Object> {
         castStringMap.put("java.time.ZonedDateTime", (s) -> {
             return ZonedDateTime.parse(s);
         });
+        
+        castStringMap.put("long", (s) -> {
+            return Long.parseLong(s);
+        });
     }
 
+    
     /**
      * Convert a {@link Map<String, String>) to an object. The instance class
      * must be specified using the fqdn class name as value for the key class.
-     *
-     * @param <T>
-     * @param map
-     * @return
+     * @param map {@link Map} <String,String>, the keys are used as property name. The key \@id is reserved
+     * @return Either the result or an exception
      */
     @SuppressWarnings("unchecked")
     protected static <T> Either<Exception, T> mapToObject(Map<String, String> map) {
@@ -88,6 +91,7 @@ public abstract class RedisAdapter implements Adapter<Object> {
 //                .get();
         
         try {
+            
             Class<?> clazz = Class.forName(map.get("class"));
             InstanceKey key = getKey(clazz);        // The field to use to parse the redis key
             Object obj = clazz.newInstance();
@@ -101,7 +105,7 @@ public abstract class RedisAdapter implements Adapter<Object> {
                     Type t = setter.getGenericParameterTypes()[0];
 
                     if (!castStringMap.containsKey(t.getTypeName())) {
-                        throw new RuntimeException("Missing mapping for objectType " + t.getTypeName());
+                        throw new RuntimeException(String.format("Missing mapping for objectType [%s]", t.getTypeName()));
                     }
 
                     Object value = castStringMap.get(t.getTypeName()).apply(map.get(pd.getName()));
@@ -139,10 +143,10 @@ public abstract class RedisAdapter implements Adapter<Object> {
      * this field, converted using the patterns specified by the annotation, is
      * stored using at the key "@id"
      *
-     * @param <T>
-     * @param t
-     * @return
+     * @param t The instance of an object to convert to a map
+     * @return Either a Map<String, String> or an exception if something bad happened
      */
+    
     protected static <T> Either<Exception, Map<String, String>> objToMap(T t) {
 
         InstanceKey key = getKey(t.getClass());
@@ -297,17 +301,28 @@ public abstract class RedisAdapter implements Adapter<Object> {
                     return (Stream<T>) keys.stream()
                             .map(Object::toString)
 //                            .map(s ->{
-//                                System.out.println(":::"+s);
 //                                return s;
 //                            })
                             .map(s -> {return getKey(type).regex.replace("$", s);})
                             .map(key -> {
+                                
                                 Map<String, String> map = jedis.hgetAll(key);
-                                map.put("@key", key);
+                                // The map is empty if there is no records at the given key
+                                if(!map.isEmpty()) {
+                                    map.put("@key", key);    
+                                }                               
                                 return map;
                             })
                             .filter(map -> {return !map.isEmpty();})                            
-                            .map(RedisAdapter::mapToObject)
+                            .map(RedisAdapter::mapToObject)                            
+                            .filter(either -> {
+                                
+                                if(either.isLeft()) {
+                                    log.warn("An error during the convertion from Redis to POJO occurred:", either.getLeft());
+                                }
+                                
+                                return either.isRight();
+                            })
                             .filter(Either::isRight)                    // Returning only valid results, but where are we handling the errors?                            
                             .map(Either::get)
                             .filter(type::isInstance)                   // Return only types that match the required class

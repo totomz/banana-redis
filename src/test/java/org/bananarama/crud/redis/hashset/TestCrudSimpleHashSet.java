@@ -44,7 +44,7 @@ public class TestCrudSimpleHashSet {
         banana = new BananaRama();
     }
     
-//    @Test
+    @Test
     public void testCreate() throws Exception {
         
         // CREATE
@@ -119,6 +119,7 @@ public class TestCrudSimpleHashSet {
                 });
             
     }
+    
     
     @Test    
     public void testReadInheritance() {
